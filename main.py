@@ -58,7 +58,7 @@ async def run_browser_agent(
     from browser_use.llm import ChatOpenAI
     from browser_use.browser.session import BrowserSession
 
-    llm = ChatOpenAI(model="gpt-4o")
+    llm = ChatOpenAI(model="gpt-4.1")
 
     # Prepare optional navigation action so visually-impaired users always start
     # on a known page.
@@ -130,6 +130,8 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
 
     shared_session = None  # will hold BrowserSession
 
+    step_handler(f"You're currently on {args.start_url}.")
+
     while True:
         try:
             if args.voice and voice_io is not None:
@@ -183,8 +185,8 @@ def main() -> None:  # noqa: C901 – keep CLI simple
     parser.add_argument(
         "--start-url",
         type=str,
-        default="https://bing.com",
-        help="Start the browsing session with this URL (only for browser environments).",
+        default="https://google.com",
+        help="Start the browsing session with this URL.",
     )
     parser.add_argument("--voice", action="store_true", help="Enable voice input and output (requires microphone and speakers).")
 
