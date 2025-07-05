@@ -1,5 +1,7 @@
 # a11y-agent – Voice-controlled Browser Agent
 
+A proof of concept for an AI based screen reader and browser assistant.
+
 This project turns natural‐language, **voice** commands into fully‐automated browser actions using the open-source [browser-use](https://github.com/browser-use/browser-use) library.  
 Hold <kbd>SPACE</kbd>, speak an instruction, release the key and the agent will:
 
@@ -8,18 +10,21 @@ Hold <kbd>SPACE</kbd>, speak an instruction, release the key and the agent will:
 3. Let the LLM (GPT-4o by default) reason about the task
 4. Click, type and scroll until it fulfils the goal
 5. Speak back the result ☺︎
+6. Repeat the process until the user says "exit"
 
 ```
-$ python main.py --voice --start-url "https://bing.com"
+$ python main.py --voice --start-url "https://google.com"
 ```
 
 ## Features
 
 - 🔊 **Push-to-talk** – hold <kbd>SPACE</kbd> to record, release to send
 - 🖱️ **Autonomous web control** powered by _browser-use_ and Playwright
-- 🦜 **OpenAI GPT-4o** by default (configurable via env)
+- 🦜 **OpenAI GPT-4.1** by default (configurable)
 - 💬 Speaks every step and the final answer (text fallback when `--voice` off)
-- 🧩 Modular architecture – small files, easy to extend
+- 🔄 **Conversation history** – the agent remembers previous steps and uses them to reason about the current task
+- Playback Caching – the agent will cache the playback of the same message to avoid repeated API calls
+- Skip playback – press <kbd>ESC</kbd> to skip playback
 
 ## Installation
 
@@ -56,7 +61,7 @@ Example (text-only):
 ```
 $ python main.py
 Type your instructions (or 'exit' to quit):
-› Find the release date of Windows 11 and read it back
+› Open CNN.com and give me a brief summary of the latest news
 ```
 
 ## Project structure
@@ -68,8 +73,6 @@ a11y-agent/
 ├── requirements.txt       # Python dependencies
 └── README.md              # This file
 ```
-
-Feel free to add more modules (e.g. custom _browser-use_ actions) under the same directory – the architecture is intentionally simple and modular.
 
 ## Troubleshooting
 
@@ -83,6 +86,14 @@ Feel free to add more modules (e.g. custom _browser-use_ actions) under the same
 - Microphone not detected ➜ make sure `sounddevice` & `pynput` have the necessary OS permissions (see the same Privacy panel above).
 - GPT-4o too expensive? Replace the model via `browser_use.llm.ChatOpenAI(model="gpt-3.5-turbo")` inside `main.py`.
 
+## 🤝 Contributing
+
+Ideas, improvements, PRs — all welcome. If you want to help make this ISO better, faster, or more flexible, open an issue or submit a pull request.
+
+##📜 License
+
+MIT — use freely, modify openly, and share widely. See the LICENSE file for details.
+
 ---
 
-© 2025 — MIT licence
+© 2025 — Jan Mittelman
