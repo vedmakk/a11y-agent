@@ -243,70 +243,66 @@ class VoiceIO:
                 "`pynput` is required for push-to-talk functionality. Install with `pip install pynput`."
             ) from ex
 
-        print("[VoiceIO] Hold SPACE and speak… release to finish (press ESC to cancel).")
+        print("[VoiceIO] Hold SPACE and speak… release to finish (ESC to cancel).")
 
-        # Synchronisation primitives to track key state
         pressed_evt = threading.Event()
         released_evt = threading.Event()
         cancel_evt = threading.Event()
 
-        def _on_press(key):  # noqa: ANN001 – callback signature
-            if key == kb.Key.esc:  # allow cancelling
+        def _on_press(key):  # noqa: ANN001
+            if key == kb.Key.esc:
                 cancel_evt.set()
-                return False  # stop listener
-            if key == kb.Key.space and not pressed_evt.is_set():
+                return False
+            if key == kb.Key.space:
                 pressed_evt.set()
-                # Play start beep (non-blocking)
-                try:
-                    self.play_beep()
-                except Exception:
-                    pass
+                return False  # Stop early; we only needed the press.
 
-        def _on_release(key):  # noqa: ANN001
-            if key == kb.Key.space and pressed_evt.is_set():
-                released_evt.set()
-                return False  # stop listener once we're done recording
+        # Wait for the first SPACE press ------------------------------------------------
+        with kb.Listener(on_press=_on_press) as wait_listener:
+            wait_listener.join()
 
-        # Wait for the user to press/hold the hotkey ---------------------------------
-        with kb.Listener(on_press=_on_press, on_release=_on_release) as listener:
-            listener.join()  # blocks until _on_release stops listener
-
-            if cancel_evt.is_set():
-                print("[VoiceIO] Recording cancelled.")
-                return ""
-
-        if not pressed_evt.is_set():
-            # Should not happen but guard anyway
+        if cancel_evt.is_set():
+            print("[VoiceIO] Recording cancelled.")
             return ""
 
-        # ---------------------------------------------------------------------------
-        # We recorded the key press but now need to record until key release.
-        # Use non-blocking key monitor so we can capture audio frames continuously.
+        if not pressed_evt.is_set():
+            return ""  # Shouldn't happen
+
+        # Play start beep --------------------------------------------------------------
+        try:
+            self.play_beep()
+        except Exception:
+            pass
+
+        # Prepare listener for release while recording
+
+        def _on_release(key):  # noqa: ANN001
+            if key == kb.Key.space:
+                released_evt.set()
+                return False
+
+        release_listener = kb.Listener(on_release=_on_release)
+        release_listener.start()
+
+        # Capture audio between press and release --------------------------------------
         audio_queue: "queue.Queue[np.ndarray]" = queue.Queue()
 
         def _audio_cb(indata, _frames, _time, _status):  # noqa: D401
-            """Callback – push frames into queue."""
             if indata.size:
                 audio_queue.put(indata.copy())
 
-        # Start a keyboard listener in *background* to detect the release while
-        # we run the blocking InputStream below.
-        def _monitor_release():  # noqa: D401
-            with kb.Listener(on_release=_on_release) as l_release:
-                l_release.join()
-
-        monitor_thread = threading.Thread(target=_monitor_release, daemon=True)
-        monitor_thread.start()
-
-        # Capture audio ----------------------------------------------------------------
-        with sd.InputStream(samplerate=self.sample_rate, channels=1, dtype="int16", callback=_audio_cb):
-            # Wait until the release event fires
-            while not released_evt.is_set():
-                if cancel_evt.is_set():
-                    break
+        with sd.InputStream(
+            samplerate=self.sample_rate,
+            channels=1,
+            dtype="int16",
+            callback=_audio_cb,
+        ):
+            while not released_evt.is_set() and not cancel_evt.is_set():
                 time.sleep(0.01)
 
-        # Play end beep (best-effort)
+        release_listener.join()
+
+        # Play end beep ----------------------------------------------------------------
         try:
             self.play_beep()
         except Exception:

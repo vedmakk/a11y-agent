@@ -129,6 +129,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
     while True:
         try:
             if args.voice and voice_io is not None:
+                step_handler("Waiting for input...")
                 # push_to_talk is blocking – off-load to thread so we don't block the event-loop
                 user_input = await asyncio.to_thread(voice_io.push_to_talk)
                 user_input = user_input.strip()
@@ -144,6 +145,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
             break
 
         try:
+            step_handler(f"Executing input: {user_input}")
             result, shared_session = await run_browser_agent(
                 user_input,
                 args.start_url,
