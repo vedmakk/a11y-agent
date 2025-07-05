@@ -164,23 +164,87 @@ class VoiceIO:
     def play_audio(self, file_path: str) -> None:
         """Play an audio file.
 
-        Primary method is the `playsound` package. If that fails (e.g. missing
-        `AppKit` on macOS) we fall back to a platform-specific system command.
+        Primary method is to spawn a lightweight system player subprocess so that
+        we can *optionally* interrupt playback early by pressing the *ESC* key.
+        If that is not possible (e.g. `pynput` not installed or a suitable player
+        binary is missing) we fall back to the blocking :pypi:`playsound` method
+        just like before.
         """
         if self.verbose:
-            print(f"[VoiceIO] Playing: {file_path}")
+            print(f"[VoiceIO] Playing: {file_path} (press ESC to skip)")
+
+        # ------------------------------------------------------------------
+        # Try to enable interrupt-able playback via a dedicated subprocess
+        # ------------------------------------------------------------------
+        try:
+            from pynput import keyboard as kb  # lazy optional dependency
+        except Exception:
+            kb = None  # type: ignore
+
+        def _spawn_player() -> Optional[subprocess.Popen]:  # noqa: D401
+            """Start an OS specific audio player as a subprocess (non-blocking).
+
+            Returns the *Popen* handle if successful, otherwise *None*.
+            """
+            if sys.platform == "darwin":
+                return subprocess.Popen(["afplay", file_path])
+            if sys.platform.startswith("linux"):
+                for cmd in (["mpg123", "-q", file_path], ["aplay", file_path]):
+                    if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
+                        return subprocess.Popen(cmd)
+                return None
+            if sys.platform.startswith("win"):
+                # PowerShell one-liner – still runs synchronously but inside our
+                # own process so we can terminate it.
+                ps_cmd = (
+                    f"(New-Object Media.SoundPlayer '{file_path}').PlaySync();"
+                )
+                return subprocess.Popen(["powershell", "-c", ps_cmd])
+            # Unsupported OS
+            return None
+
+        # Only attempt interruptible mode if we have *both* pynput and a player
+        if kb is not None:
+            player_proc = _spawn_player()
+            if player_proc is not None:
+                interrupted = threading.Event()
+
+                def _on_press(key):  # noqa: ANN001
+                    if key == kb.Key.esc:
+                        # Mark interrupted and kill the subprocess.
+                        interrupted.set()
+                        try:
+                            player_proc.terminate()
+                        except Exception:
+                            pass
+                        finally:
+                            self.play_beep()
+                        return False  # stop listener
+
+                listener = kb.Listener(on_press=_on_press)
+                listener.start()
+                # Wait until playback ends or is interrupted
+                player_proc.wait()
+                listener.stop()
+
+                if interrupted.is_set() and self.verbose:
+                    print("[VoiceIO] Playback interrupted by user.")
+                return  # Either way we're done – early or not.
+
+        # ------------------------------------------------------------------
+        # Fallback: original blocking behaviour with playsound / system players
+        # ------------------------------------------------------------------
         try:
             if playsound is None:
                 raise RuntimeError("playsound not available")
             playsound(file_path)
         except Exception as e:
-            # Fallback strategies per platform
+            # Fallback strategies per platform (blocking)
             if self.verbose:
                 print(f"[VoiceIO] playsound failed: {e}. Falling back to system player…")
             if sys.platform == "darwin":
                 subprocess.run(["afplay", file_path], check=False)
             elif sys.platform.startswith("linux"):
-                # Try common CLI players
                 for cmd in (["mpg123", "-q", file_path], ["aplay", file_path]):
                     if subprocess.run(["which", cmd[0]], capture_output=True).returncode == 0:
                         subprocess.run(cmd, check=False)
@@ -188,7 +252,6 @@ class VoiceIO:
                 else:
                     raise RuntimeError("No suitable audio player found on Linux") from e
             elif sys.platform.startswith("win"):
-                # Use PowerShell on Windows
                 subprocess.run([
                     "powershell",
                     "-c",
