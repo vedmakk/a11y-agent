@@ -51,6 +51,7 @@ async def run_browser_agent(
     task: str,
     start_url: str,
     browser_session,
+    message_context: str | None = None,
 ) -> tuple[str, "BrowserSession"]:  # type: ignore[name-defined]
     """Execute *task* using a Browser-Use Agent and return (result, session)."""
 
@@ -95,6 +96,7 @@ async def run_browser_agent(
     agent = Agent(
         task=task,
         llm=llm,
+        message_context=message_context,
         use_vision=True,
         initial_actions=initial_actions,
         extend_system_message=extend_system_message,
@@ -129,6 +131,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
         print("Type your instructions (or 'exit' to quit):")
 
     shared_session = None  # will hold BrowserSession
+    conversation_history: list[tuple[str, str]] = []  # Store (user, agent) pairs
 
     step_handler(f"You're currently on {args.start_url}.")
 
@@ -153,12 +156,18 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
 
         try:
             step_handler(f"Executing input: {user_input}")
+            # Build compact history string for next agent call (exclude current input)
+            message_context = "\n\n".join(
+                [f"User: {u}\nAgent: {a}" for u, a in conversation_history]
+            )
             result, shared_session = await run_browser_agent(
                 user_input,
                 args.start_url,
                 shared_session,
+                message_context,
             )
             step_handler(result)
+            conversation_history.append((user_input, result))
         except Exception as exc:
             print(f"[Error] {exc}")
             if args.debug:
