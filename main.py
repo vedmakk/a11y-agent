@@ -26,17 +26,20 @@ def build_step_handler(enable_voice: bool) -> tuple[Callable[[str], None], Optio
             raise RuntimeError("voice_io dependencies missing – cannot enable --voice")
         voice_io = VoiceIO()
 
-        def _handler(msg: str):
+        def _handler(msg: str, *, cache: bool = False):
             print(msg)
             try:
-                voice_io.speak(msg)
+                voice_io.speak(msg, cache=cache)
             except Exception as exc:
                 print(f"[VoiceIO] Failed to speak: {exc}")
 
         return _handler, voice_io
 
     # Text-only fallback
-    return print, None
+    def plain_handler(msg: str, *, cache: bool = False):  # noqa: D401
+        print(msg)
+
+    return plain_handler, None
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +123,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
     if args.voice:
         step_handler(
             "Push-to-talk enabled. Hold SPACE to speak, release to send. Say 'exit' to quit."  # type: ignore[arg-type]
+            , cache=True
         )
     else:
         print("Type your instructions (or 'exit' to quit):")
@@ -129,7 +133,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
     while True:
         try:
             if args.voice and voice_io is not None:
-                step_handler("Waiting for input...")
+                step_handler("Waiting for input... or say 'exit' to quit.", cache=True)
                 # push_to_talk is blocking – off-load to thread so we don't block the event-loop
                 user_input = await asyncio.to_thread(voice_io.push_to_talk)
                 user_input = user_input.strip()
@@ -142,6 +146,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
         if not user_input:
             continue
         if user_input.lower() == "exit":
+            step_handler("Exiting...", cache=True)
             break
 
         try:

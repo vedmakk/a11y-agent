@@ -24,6 +24,7 @@ import time
 from typing import Optional
 import threading
 import queue
+import hashlib
 
 # Lazy imports for heavy / optional deps
 try:
@@ -79,6 +80,15 @@ class VoiceIO:
         # Client is created lazily because `openai.OpenAI()` will read env vars
         # and may raise if missing.
         self._client: Optional[openai.OpenAI] = None
+
+        # Simple on-disk TTS cache ----------------------------------------------------
+        self._cache_dir = os.path.join(tempfile.gettempdir(), "voiceio_cache")
+        try:
+            os.makedirs(self._cache_dir, exist_ok=True)
+        except Exception:
+            # Fallback to cwd if temp dir is not writable
+            self._cache_dir = os.path.abspath("voiceio_cache")
+            os.makedirs(self._cache_dir, exist_ok=True)
 
     # ---------- OpenAI helpers ----------
 
@@ -189,8 +199,13 @@ class VoiceIO:
 
     # ---------- High-level helpers ----------
 
-    def speak(self, text):  # type: ignore[override]
-        """Generate speech for *text* (str or list content) and play it."""
+    def speak(self, text, *, cache: bool = False):  # type: ignore[override]
+        """Generate speech for *text* (str or list content) and play it.
+
+        If *cache* is True we store the generated MP3 in a temp directory and
+        reuse it for identical messages (hashing the UTF-8 text). This avoids
+        repeated TTS API calls for common prompts such as "Waiting for input…".
+        """
         # Normalize possible content structures
         if isinstance(text, list):
             # join text fragments or dicts containing 'text'
@@ -208,15 +223,34 @@ class VoiceIO:
         if not text.strip():
             return
 
+        # ---------------------------------------------------------------------
+        if cache:
+            key = hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
+            cached_path = os.path.join(self._cache_dir, f"{key}.mp3")
+            if os.path.exists(cached_path):
+                self.play_audio(cached_path)
+                return
+
         mp3_path = self.text_to_speech(text)
         try:
-            self.play_audio(mp3_path)
+            # If caching requested store a copy in cache dir
+            if cache:
+                try:
+                    os.replace(mp3_path, cached_path)
+                    self.play_audio(cached_path)
+                    mp3_path = cached_path  # avoid double delete
+                except Exception:
+                    # Fallback: just play the temp file
+                    self.play_audio(mp3_path)
+            else:
+                self.play_audio(mp3_path)
         finally:
-            # Cleanup temp file
-            try:
-                os.remove(mp3_path)
-            except FileNotFoundError:
-                pass 
+            # Cleanup temp file if not cached
+            if os.path.exists(mp3_path) and (not cache or mp3_path != cached_path):
+                try:
+                    os.remove(mp3_path)
+                except FileNotFoundError:
+                    pass 
 
     def play_beep(self):
         self.play_audio("beep.m4a")
