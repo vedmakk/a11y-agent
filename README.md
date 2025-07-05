@@ -75,7 +75,12 @@ Feel free to add more modules (e.g. custom _browser-use_ actions) under the same
 
 - First run is slow ➜ Playwright downloads the browser; subsequent runs are fast.
 - "Playwright not installed" ➜ run `pip install playwright && playwright install`.
-- Microphone not detected ➜ make sure `sounddevice` & `pynput` have the necessary OS permissions (macOS: System Settings ▸ Privacy & Security).
+- **Voice I/O fails with API-key error** ➜ make sure the `OPENAI_API_KEY` is **exported in the shell** or present in a `.env` file in the project root. The key is loaded early via `python-dotenv`.
+- **macOS "process is not trusted" warning** ➜ grant Accessibility permission:
+  1. Keep the script running so macOS shows the prompt _or_ open **System Settings ▸ Privacy & Security ▸ Accessibility**.
+  2. Click "+" and add the Terminal/iTerm/VScode app you use to run the program. Ensure the toggle is **enabled**.
+  3. Re-launch the terminal and run the script again.
+- Microphone not detected ➜ make sure `sounddevice` & `pynput` have the necessary OS permissions (see the same Privacy panel above).
 - GPT-4o too expensive? Replace the model via `browser_use.llm.ChatOpenAI(model="gpt-3.5-turbo")` inside `main.py`.
 
 ---

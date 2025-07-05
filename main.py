@@ -1,8 +1,15 @@
+# Standard lib
 import argparse
 import asyncio
-import os
 import sys
 from typing import Callable, Optional
+
+# Make sure environment variables from `.env` are available **before** we
+# instantiate `VoiceIO` or Browser-Use models.
+from dotenv import load_dotenv
+
+# Load .env at import time so every subsequent import sees the variables.
+load_dotenv()
 
 try:
     from voice_io import VoiceIO  # noqa: E402
