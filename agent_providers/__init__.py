@@ -23,12 +23,14 @@ def get_agent_provider(name: str) -> BaseAgentProvider:  # noqa: D401
     ValueError
         If *name* is unknown.
     """
-    if name == "browser-use":
+    normalized = name.lower().replace("_", "-").strip()
+
+    if normalized in {"browser-use", "browser", "browseruse"}:
         from .browser_use_provider import BrowserUseAgentProvider  # lazy import to avoid heavy deps
 
         return BrowserUseAgentProvider()
 
-    if name == "computer-use":
+    if normalized in {"computer-use", "computer", "computeruse"}:
         from .computer_use_provider import CuaAgentProvider  # lazy import to avoid heavy deps
 
         return CuaAgentProvider()
