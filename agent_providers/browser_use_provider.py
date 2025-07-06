@@ -7,7 +7,7 @@ This provider wraps the original *browser_use* logic that used to live in
 interface.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Callable
 
 from .base import BaseAgentProvider
 
@@ -37,7 +37,7 @@ class BrowserUseAgentProvider(BaseAgentProvider):
     # BaseAgentProvider interface
     # ------------------------------------------------------------------
 
-    async def run_full_turn(self, items: List[Dict[str, str]], start_url: str) -> str:  # noqa: D401
+    async def run_full_turn(self, items: List[Dict[str, str]], start_url: str, step_handler: Callable[[str], None]) -> List[Dict[str, str]]:  # noqa: D401
         # ------------------------------------------------------------------
         # Extract *current* task (last user message) & build message context
         # ------------------------------------------------------------------
@@ -128,7 +128,7 @@ class BrowserUseAgentProvider(BaseAgentProvider):
         # Update session handle (should be the same instance)
         self._browser_session = agent.browser_session  # type: ignore[attr-defined]
 
-        return result_text
+        return [{"role": "assistant", "content": result_text}]
 
     # ------------------------------------------------------------------
     # Cleanup

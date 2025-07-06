@@ -57,7 +57,7 @@ VOICE_OPENAI_VOICE=alloy
 # Choose which agent to use for executing browser actions. Currently supported:
 #   - `browser-use` (default) – uses the browser-use + Playwright implementation.
 
-AGENT_PROVIDER=browser-use
+AGENT_PROVIDER=browser-use # or computer-use
 ```
 
 > The `main.py` helper reads these variables early during start-up (via

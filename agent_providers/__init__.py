@@ -28,4 +28,9 @@ def get_agent_provider(name: str) -> BaseAgentProvider:  # noqa: D401
 
         return BrowserUseAgentProvider()
 
+    if name == "computer-use":
+        from .computer_use_provider import CuaAgentProvider  # lazy import to avoid heavy deps
+
+        return CuaAgentProvider()
+
     raise ValueError(f"Unknown AGENT_PROVIDER: {name}") 

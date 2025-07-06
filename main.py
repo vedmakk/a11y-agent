@@ -107,7 +107,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
     # ---------------------------------------------------------------
     # Initialise chosen agent provider
     # ---------------------------------------------------------------
-    agent_provider_name = os.getenv("AGENT_PROVIDER", "browser")
+    agent_provider_name = os.getenv("AGENT_PROVIDER", "browser-use")
     agent_provider = get_agent_provider(agent_provider_name)
 
     conversation_history: list[dict[str, str]] = []  # Store conversation messages
@@ -137,14 +137,14 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
             step_handler(f"Executing input: {user_input}")
             # Run full turn via selected agent provider
             items = [*conversation_history, {"role": "user", "content": user_input}]
-            result = await agent_provider.run_full_turn(items, args.start_url)
+            result_items = await agent_provider.run_full_turn(items, args.start_url, step_handler)
 
-            step_handler(result)
+            step_handler(result_items[-1]["content"])
 
             # Update conversation history
             conversation_history.extend([
                 {"role": "user", "content": user_input},
-                {"role": "assistant", "content": result},
+                *result_items,
             ])
         except Exception as exc:
             print(f"[Error] {exc}")

@@ -10,14 +10,14 @@ session) so that consecutive calls can share context as required.
 """
 
 import abc
-from typing import Dict, List
+from typing import Dict, List, Callable
 
 
 class BaseAgentProvider(abc.ABC):
     """Abstract base for concrete agent implementations."""
 
     @abc.abstractmethod
-    async def run_full_turn(self, items: List[Dict[str, str]], start_url: str) -> str:  # noqa: D401
+    async def run_full_turn(self, items: List[Dict[str, str]], start_url: str, step_handler: Callable[[str], None]) -> List[Dict[str, str]]:  # noqa: D401
         """Run a complete conversation turn.
 
         Parameters
