@@ -83,7 +83,7 @@ Type your instructions (or 'exit' to quit):
 a11y-agent/
 ├── main.py                # CLI & control loop
 ├── voice_io.py            # Speech-to-text + text-to-speech (push-to-talk added)
-├── providers/             # Pluggable STT/TTS engines (OpenAI, System, …)
+├── speech_providers/      # Pluggable STT/TTS engines (OpenAI, System, …)
 ├── requirements.txt       # Python dependencies
 └── README.md              # This file
 ```

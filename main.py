@@ -28,7 +28,7 @@ def build_step_handler(enable_voice: bool) -> tuple[Callable[[str], None], Optio
             raise RuntimeError("voice_io dependencies missing – cannot enable --voice")
 
         # ---------------------------------------------------------------
-        # Determine providers from environment variables
+        # Determine STT and TTS providers from environment variables
         # ---------------------------------------------------------------
         stt_name = os.getenv("VOICE_STT_PROVIDER", "openai").lower()
         tts_name = os.getenv("VOICE_TTS_PROVIDER", "openai").lower()
@@ -36,7 +36,7 @@ def build_step_handler(enable_voice: bool) -> tuple[Callable[[str], None], Optio
         # Helper to instantiate provider based on name ----------
         def _make_provider(kind: str, name: str):  # noqa: D401
             if name == "openai":
-                from providers.openai_provider import OpenAIProvider  # lazy import
+                from speech_providers.openai_provider import OpenAIProvider  # lazy import
 
                 model_trans = os.getenv("VOICE_OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
                 model_tts = os.getenv("VOICE_OPENAI_TTS_MODEL", "tts-1")
@@ -50,11 +50,11 @@ def build_step_handler(enable_voice: bool) -> tuple[Callable[[str], None], Optio
                 )
             elif name == "system":
                 if kind == "stt":
-                    from providers.system_provider import SystemSTTProvider  # lazy import
+                    from speech_providers.system_provider import SystemSTTProvider  # lazy import
 
                     return SystemSTTProvider()
                 else:
-                    from providers.system_provider import SystemTTSProvider  # lazy import
+                    from speech_providers.system_provider import SystemTTSProvider  # lazy import
 
                     return SystemTTSProvider()
             else:
@@ -178,7 +178,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
     shared_session = None  # will hold BrowserSession
     conversation_history: list[tuple[str, str]] = []  # Store (user, agent) pairs
 
-    step_handler(f"You're currently on {args.start_url}.")
+    step_handler(f"You're currently on {args.start_url}.", cache=True)
 
     while True:
         try:

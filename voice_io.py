@@ -27,7 +27,7 @@ from typing import Optional
 import threading
 import queue
 import hashlib
-from providers.base import STTProvider, TTSProvider
+from speech_providers.base import STTProvider, TTSProvider
 
 # Lazy imports for heavy / optional deps
 try:
