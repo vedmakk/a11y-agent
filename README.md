@@ -93,6 +93,7 @@ a11y-agent/
 - First run is slow ➜ Playwright downloads the browser; subsequent runs are fast.
 - "Playwright not installed" ➜ run `pip install playwright && playwright install`.
 - **Voice I/O fails with API-key error** ➜ make sure the `OPENAI_API_KEY` is **exported in the shell** or present in a `.env` file in the project root. The key is loaded early via `python-dotenv`.
+- **System TTS fails on MacOS** ➜ Make sure that `Spoken Content` is enabled in `System Settings > Accessibility` (Test in Terminal: `say "Hello, world!"`).
 - **macOS "process is not trusted" warning** ➜ grant Accessibility permission:
   1. Keep the script running so macOS shows the prompt _or_ open **System Settings ▸ Privacy & Security ▸ Accessibility**.
   2. Click "+" and add the Terminal/iTerm/VScode app you use to run the program. Ensure the toggle is **enabled**.
