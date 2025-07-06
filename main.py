@@ -18,7 +18,8 @@ try:
 except ImportError:
     VoiceIO = None  # type: ignore
 
-# Lazy import browser_use only when needed to avoid heavy imports on --help
+# Agent provider factory
+from agent_providers import get_agent_provider
 
 def build_step_handler(enable_voice: bool) -> tuple[Callable[[str], None], Optional["VoiceIO"]]:  # type: ignore[name-defined]
     """Return a `(handler, voice_io)` pair depending on *enable_voice*."""
@@ -88,78 +89,6 @@ def build_step_handler(enable_voice: bool) -> tuple[Callable[[str], None], Optio
 
 
 # ---------------------------------------------------------------------------
-# Browser-Use helper
-# ---------------------------------------------------------------------------
-
-
-async def run_browser_agent(
-    task: str,
-    start_url: str,
-    browser_session,
-    message_context: str | None = None,
-) -> tuple[str, "BrowserSession"]:  # type: ignore[name-defined]
-    """Execute *task* using a Browser-Use Agent and return (result, session)."""
-
-    from browser_use import Agent  # lazy import
-    from browser_use.llm import ChatOpenAI
-    from browser_use.browser.session import BrowserSession
-
-    llm = ChatOpenAI(model="gpt-4.1")
-
-    # Prepare optional navigation action so visually-impaired users always start
-    # on a known page.
-    initial_actions = []
-    if start_url and browser_session is None:
-        initial_actions.append({"go_to_url": {"url": start_url, "new_tab": True}})
-
-    extend_system_message = (
-        """
-        You are an accessibility assistant and help the user browse the web, get information and get
-        things done. You act as a Screen Reader and help the user navigate the web and execute actions.
-
-        You assume that the user can't see the screen, so despite executing the actions to
-        fulfill the user's intent, you should describe what you did and what is going on the
-        screen, in a way that is accessible to the user.
-
-        Your answers should be concise, brief and to the point, but at the same time - since the
-        user can't see the screen - you should also describe what is going on the screen, in a way
-        that is accessible to the user.
-
-        Go from important information to less important information (e.g. Menu items, Main content is important, sidebars or footers are less important).
-
-        Important constraints:
-        - User your vision capabilities to take screenshots of the screen and also describe the images (remember: the user can't see the screen)
-        - YOU DO NOT navigate to another page unless the user asks you to do so.
-        - Don't overthink it, always try to execute the user's intent with the least amount of steps and as fast as possible – while replying as swift as possible.
-        """
-    )
-
-    # Create a persistent BrowserSession on first run
-    if browser_session is None:
-        browser_session = BrowserSession(keep_alive=True, initialized=False)
-
-    agent = Agent(
-        task=task,
-        llm=llm,
-        message_context=message_context,
-        use_vision=True,
-        initial_actions=initial_actions,
-        extend_system_message=extend_system_message,
-        browser_session=browser_session,
-    )
-
-    history = await agent.run()
-
-    # Attempt to fetch a concise result description
-    try:
-        result_text = history.final_result()
-    except Exception:
-        result_text = str(history)
-
-    return result_text, agent.browser_session  # type: ignore[attr-defined]
-
-
-# ---------------------------------------------------------------------------
 # Interactive loop (async)
 # ---------------------------------------------------------------------------
 
@@ -175,8 +104,13 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
     else:
         print("Type your instructions (or 'exit' to quit):")
 
-    shared_session = None  # will hold BrowserSession
-    conversation_history: list[tuple[str, str]] = []  # Store (user, agent) pairs
+    # ---------------------------------------------------------------
+    # Initialise chosen agent provider
+    # ---------------------------------------------------------------
+    agent_provider_name = os.getenv("AGENT_PROVIDER", "browser")
+    agent_provider = get_agent_provider(agent_provider_name)
+
+    conversation_history: list[dict[str, str]] = []  # Store conversation messages
 
     step_handler(f"You're currently on {args.start_url}.", cache=True)
 
@@ -201,31 +135,29 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
 
         try:
             step_handler(f"Executing input: {user_input}")
-            # Build compact history string for next agent call (exclude current input)
-            message_context = "\n\n".join(
-                [f"User: {u}\nAgent: {a}" for u, a in conversation_history]
-            )
-            result, shared_session = await run_browser_agent(
-                user_input,
-                args.start_url,
-                shared_session,
-                message_context,
-            )
+            # Run full turn via selected agent provider
+            items = [*conversation_history, {"role": "user", "content": user_input}]
+            result = await agent_provider.run_full_turn(items, args.start_url)
+
             step_handler(result)
-            conversation_history.append((user_input, result))
+
+            # Update conversation history
+            conversation_history.extend([
+                {"role": "user", "content": user_input},
+                {"role": "assistant", "content": result},
+            ])
         except Exception as exc:
             print(f"[Error] {exc}")
             if args.debug:
                 raise
 
     # Clean-up ------------------------------------------------------------------
-    if shared_session is not None:
-        try:
-            await shared_session.stop()
-        except Exception as exc:
-            if args.debug:
-                raise
-            print(f"[Warning] Failed to close browser session cleanly: {exc}")
+    try:
+        await agent_provider.close()
+    except Exception as exc:
+        if args.debug:
+            raise
+        print(f"[Warning] Failed to close agent cleanly: {exc}")
 
 
 # ---------------------------------------------------------------------------

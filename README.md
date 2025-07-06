@@ -52,6 +52,12 @@ VOICE_TTS_PROVIDER=openai
 VOICE_OPENAI_TRANSCRIPTION_MODEL=whisper-1
 VOICE_OPENAI_TTS_MODEL=tts-1
 VOICE_OPENAI_VOICE=alloy
+
+# --- Agent provider configuration ---
+# Choose which agent to use for executing browser actions. Currently supported:
+#   - `browser-use` (default) – uses the browser-use + Playwright implementation.
+
+AGENT_PROVIDER=browser-use
 ```
 
 > The `main.py` helper reads these variables early during start-up (via
@@ -84,6 +90,7 @@ a11y-agent/
 ├── main.py                # CLI & control loop
 ├── voice_io.py            # Speech-to-text + text-to-speech (push-to-talk added)
 ├── speech_providers/      # Pluggable STT/TTS engines (OpenAI, System, …)
+├── agent_providers/       # Pluggable agent implementations (browser-use, …)
 ├── requirements.txt       # Python dependencies
 └── README.md              # This file
 ```
