@@ -7,7 +7,7 @@ Hold <kbd>SPACE</kbd>, speak an instruction, release the key and the agent will:
 
 1. Transcribe your speech with OpenAI Whisper
 2. Launch a Chromium browser (Playwright) locally
-3. Let the LLM (GPT-4o by default) reason about the task
+3. Let the LLM (GPT-4.1 by default, or OpenAI's _computer-use_ model) reason about the task
 4. Click, type and scroll until it fulfils the goal
 5. Speak back the result ☺︎
 6. Repeat the process until the user says "exit"
@@ -19,12 +19,39 @@ $ python main.py --voice --start-url "https://google.com"
 ## Features
 
 - 🔊 **Push-to-talk** – hold <kbd>SPACE</kbd> to record, release to send
-- 🖱️ **Autonomous web control** powered by _browser-use_ and Playwright
-- 🦜 **OpenAI GPT-4.1** by default (configurable)
+- 🖱️ **Autonomous web control** powered by _browser-use_ or OpenAI's _computer-use_ and Playwright
+- 🦜 **OpenAI GPT-4.1** or OpenAI's _computer-use_ model by default (configurable)
 - 💬 Speaks every step and the final answer (text fallback when `--voice` off)
 - 🔄 **Conversation history** – the agent remembers previous steps and uses them to reason about the current task
 - Playback Caching – the agent will cache the playback of the same message to avoid repeated API calls
 - Skip playback – press <kbd>ESC</kbd> to skip playback
+- 🔌 **Pluggable architecture** – swap agent and STT/TTS providers via environment variables
+
+## Pluggable architecture
+
+This project is built around **modular providers** that you can mix-and-match at run-time.
+
+### Agent providers (`agent_providers/`)
+
+| Provider                  | Description                                                                                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `browser-use` _(default)_ | Launches a local Playwright-controlled Chromium using the open-source [browser-use](https://github.com/browser-use/browser-use) library. |
+| `computer-use`            | Also uses a local Playwright-controlled Chromium, but with OpenAI's _computer-use_ model (currently in preview).                         |
+
+Select the implementation with the `AGENT_PROVIDER` environment variable.
+
+### Voice providers (`speech_providers/`)
+
+Speech-to-Text (STT) and Text-to-Speech (TTS) engines are configured independently, so you can combine them freely:
+
+| Provider | STT engine           | TTS engine                                                    |
+| -------- | -------------------- | ------------------------------------------------------------- |
+| `openai` | Whisper              | `tts-1` (multiple voices)                                     |
+| `system` | OS default dictation | OS default synthesis (e.g. `say` on macOS, `espeak` on Linux) |
+
+Configure these via `VOICE_STT_PROVIDER` and `VOICE_TTS_PROVIDER`.
+
+---
 
 ## Installation
 
