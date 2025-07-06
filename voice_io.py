@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-"""Utility for voice input (speech-to-text) and voice output (text-to-speech) using
-OpenAI audio endpoints.
+"""Utility for voice input (speech-to-text) and voice output (text-to-speech).
+
+The core I/O logic is provider-agnostic. Concrete STT/TTS implementations live
+in `providers/` and are injected at runtime (see `main.py`).
 
 Requirements (added to requirements.txt):
     openai>=1.30.0
@@ -25,6 +27,7 @@ from typing import Optional
 import threading
 import queue
 import hashlib
+from speech_providers.base import STTProvider, TTSProvider
 
 # Lazy imports for heavy / optional deps
 try:
@@ -41,45 +44,37 @@ try:
 except Exception:
     playsound = None  # type: ignore
 
-try:
-    import openai  # type: ignore
-except Exception:
-    openai = None
+# No direct provider imports here – providers are instantiated externally.
 
 DEFAULT_SAMPLE_RATE = 16_000
 
 
 class VoiceIO:
     """High-level helper that records microphone input, transcribes it using
-    OpenAI Whisper and speaks text responses using OpenAI TTS.
+    an injected STT provider and speaks text responses using an injected TTS
+    provider.
     """
 
     def __init__(
         self,
-        model_transcription: str = "whisper-1",
-        model_tts: str = "tts-1",
-        voice: str = "alloy",
+        *,
+        stt_provider: STTProvider,
+        tts_provider: TTSProvider,
         sample_rate: int = DEFAULT_SAMPLE_RATE,
         verbose: bool = False,
     ) -> None:
-        if openai is None:
-            raise ImportError(
-                "`openai` python package is required for VoiceIO. Install with `pip install openai`"
-            )
+        # Core audio deps are mandatory for recording / playback
         if sd is None or np is None or sf is None:
             raise ImportError(
                 "`sounddevice`, `soundfile` and `numpy` are required for VoiceIO. Install with `pip install sounddevice soundfile numpy`"
             )
-        # `playsound` is optional because we have OS fallbacks.
+
+        # Providers (mandatory)
+        self.stt_provider = stt_provider
+        self.tts_provider = tts_provider
 
         self.sample_rate = sample_rate
-        self.model_transcription = model_transcription
-        self.model_tts = model_tts
-        self.voice_name = voice
         self.verbose = verbose
-        # Client is created lazily because `openai.OpenAI()` will read env vars
-        # and may raise if missing.
-        self._client: Optional[openai.OpenAI] = None
 
         # Simple on-disk TTS cache ----------------------------------------------------
         self._cache_dir = os.path.join(tempfile.gettempdir(), "voiceio_cache")
@@ -89,14 +84,6 @@ class VoiceIO:
             # Fallback to cwd if temp dir is not writable
             self._cache_dir = os.path.abspath("voiceio_cache")
             os.makedirs(self._cache_dir, exist_ok=True)
-
-    # ---------- OpenAI helpers ----------
-
-    @property
-    def client(self) -> "openai.OpenAI":  # type: ignore[name-defined]
-        if self._client is None:
-            self._client = openai.OpenAI()
-        return self._client
 
     # ---------- Recording helpers ----------
 
@@ -126,38 +113,22 @@ class VoiceIO:
     # ---------- Speech ↔ Text ----------
 
     def speech_to_text(self, wav_path: str) -> str:
+        """Transcribe *wav_path* using the configured STT provider."""
         if self.verbose:
-            print("[VoiceIO] Transcribing audio with OpenAI Whisper…")
-        with open(wav_path, "rb") as f:
-            transcription = self.client.audio.transcriptions.create(
-                model=self.model_transcription,
-                file=f,
-            )
-        text = transcription.text.strip()
+            print("[VoiceIO] Transcribing audio…")
+        text = self.stt_provider.transcribe(wav_path)  # type: ignore[arg-type]
         if self.verbose:
             print(f"[VoiceIO] Transcription result: {text}")
         return text
 
-    def _text_to_speech_mp3_bytes(self, text: str) -> bytes:
-        response = self.client.audio.speech.create(
-            model=self.model_tts,
-            voice=self.voice_name,
-            input=text,
-        )
-        return response.content  # type: ignore[attr-defined]
+    def text_to_speech(self, text: str, output_path: Optional[str] = None) -> str:
+        """Generate speech for *text* via the configured TTS provider.
 
-    def text_to_speech(self, text: str) -> str:
-        """Convert *text* to speech (MP3) and write it to a temporary file.
-
-        Returns MP3 file path.
+        Returns the path to the generated audio file (created by the provider).
         """
         if self.verbose:
             print(f"[VoiceIO] Generating speech for: {text[:60]}…")
-        audio_bytes = self._text_to_speech_mp3_bytes(text)
-        fd, filename = tempfile.mkstemp(suffix=".mp3", prefix="voiceio_tts_")
-        with os.fdopen(fd, "wb") as f:
-            f.write(audio_bytes)
-        return filename
+        return self.tts_provider.synthesize(text, output_path)  # type: ignore[arg-type]
 
     # ---------- Playback ----------
 
@@ -287,33 +258,26 @@ class VoiceIO:
             return
 
         # ---------------------------------------------------------------------
+        ext = getattr(self.tts_provider, "file_extension", ".mp3")
+
+        cached_path: Optional[str] = None
         if cache:
             key = hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
-            cached_path = os.path.join(self._cache_dir, f"{key}.mp3")
+            cached_path = os.path.join(self._cache_dir, f"{key}{ext}")
             if os.path.exists(cached_path):
                 self.play_audio(cached_path)
                 return
 
-        mp3_path = self.text_to_speech(text)
+        audio_path = self.text_to_speech(text, cached_path if cache else None)
         try:
-            # If caching requested store a copy in cache dir
-            if cache:
-                try:
-                    os.replace(mp3_path, cached_path)
-                    self.play_audio(cached_path)
-                    mp3_path = cached_path  # avoid double delete
-                except Exception:
-                    # Fallback: just play the temp file
-                    self.play_audio(mp3_path)
-            else:
-                self.play_audio(mp3_path)
+            self.play_audio(audio_path)
         finally:
             # Cleanup temp file if not cached
-            if os.path.exists(mp3_path) and (not cache or mp3_path != cached_path):
+            if os.path.exists(audio_path) and (not cache or audio_path != cached_path):
                 try:
-                    os.remove(mp3_path)
+                    os.remove(audio_path)
                 except FileNotFoundError:
-                    pass 
+                    pass
 
     def play_beep(self):
         self.play_audio("beep.m4a")

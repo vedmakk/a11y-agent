@@ -8,8 +8,10 @@ from typing import Callable, Optional
 # instantiate `VoiceIO` or Browser-Use models.
 from dotenv import load_dotenv
 
-# Load .env at import time so every subsequent import sees the variables.
-load_dotenv()
+# Load .env at import time; override ensures .env settings win over inherited envs
+load_dotenv(override=True)
+
+import os
 
 try:
     from voice_io import VoiceIO  # noqa: E402
@@ -24,7 +26,50 @@ def build_step_handler(enable_voice: bool) -> tuple[Callable[[str], None], Optio
     if enable_voice:
         if VoiceIO is None:
             raise RuntimeError("voice_io dependencies missing – cannot enable --voice")
-        voice_io = VoiceIO()
+
+        # ---------------------------------------------------------------
+        # Determine STT and TTS providers from environment variables
+        # ---------------------------------------------------------------
+        stt_name = os.getenv("VOICE_STT_PROVIDER", "openai").lower()
+        tts_name = os.getenv("VOICE_TTS_PROVIDER", "openai").lower()
+
+        # Helper to instantiate provider based on name ----------
+        def _make_provider(kind: str, name: str):  # noqa: D401
+            if name == "openai":
+                from speech_providers.openai_provider import OpenAIProvider  # lazy import
+
+                model_trans = os.getenv("VOICE_OPENAI_TRANSCRIPTION_MODEL", "whisper-1")
+                model_tts = os.getenv("VOICE_OPENAI_TTS_MODEL", "tts-1")
+                voice = os.getenv("VOICE_OPENAI_VOICE", "alloy")
+
+                # We may share a single OpenAIProvider for both STT and TTS
+                return OpenAIProvider(
+                    model_transcription=model_trans,
+                    model_tts=model_tts,
+                    voice=voice,
+                )
+            elif name == "system":
+                if kind == "stt":
+                    from speech_providers.system_provider import SystemSTTProvider  # lazy import
+
+                    return SystemSTTProvider()
+                else:
+                    from speech_providers.system_provider import SystemTTSProvider  # lazy import
+
+                    return SystemTTSProvider()
+            else:
+                raise ValueError(f"Unknown {kind.upper()} provider: {name}")
+
+        # Instantiate providers (may reuse same instance if both are openai)
+        if stt_name == tts_name == "openai":
+            shared = _make_provider("stt", "openai")  # type: ignore[assignment]
+            stt_provider = shared  # type: ignore[assignment]
+            tts_provider = shared  # type: ignore[assignment]
+        else:
+            stt_provider = _make_provider("stt", stt_name)
+            tts_provider = _make_provider("tts", tts_name)
+
+        voice_io = VoiceIO(stt_provider=stt_provider, tts_provider=tts_provider)
 
         def _handler(msg: str, *, cache: bool = False):
             print(msg)
@@ -133,7 +178,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
     shared_session = None  # will hold BrowserSession
     conversation_history: list[tuple[str, str]] = []  # Store (user, agent) pairs
 
-    step_handler(f"You're currently on {args.start_url}.")
+    step_handler(f"You're currently on {args.start_url}.", cache=True)
 
     while True:
         try:
