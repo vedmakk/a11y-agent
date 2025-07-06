@@ -52,8 +52,9 @@ class CuaAgentProvider(BaseAgentProvider):
         
         # Lazily instantiate computer + heavy agent --------------------------------
         if self._computer is None:
-            # Instantiate computer class and enter context to start Playwright
-            self._computer = self._computer_cls()
+            # Use the computer class as a context manager so that Playwright is
+            # started (via __enter__) and properly shut down later in close().
+            self._computer = self._computer_cls().__enter__()
 
         # Lazily instantiate the heavy agent with the runtime step_handler
         if self._agent is None:
@@ -87,4 +88,19 @@ class CuaAgentProvider(BaseAgentProvider):
     # ------------------------------------------------------------------
 
     async def close(self) -> None:  # noqa: D401
-        pass
+        # Gracefully shut down the computer (and therefore Playwright).
+        # We call the context-manager cleanup to ensure browsers are closed
+        # and Playwright is stopped.  The three 'None' arguments correspond
+        # to exc_type, exc_val and exc_tb when used in a "with" block.
+        if self._computer is not None:
+            # The computer instance **is** the context manager returned from
+            # __enter__, so we can safely call __exit__ on it.
+            try:
+                exit_func = getattr(self._computer, "__exit__", None)
+                if callable(exit_func):
+                    exit_func(None, None, None)
+            finally:
+                self._computer = None
+
+        # Clear agent reference as well so it gets GC'd.
+        self._agent = None
