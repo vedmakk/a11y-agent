@@ -20,6 +20,7 @@ class Agent:
         self,
         model="computer-use-preview",
         computer: Computer = None,
+        acknowledge_safety_check_callback: Callable = lambda: False,
         tools: list[dict] = [],
         step_handler: Callable[[str], None] | None = None,
     ):
@@ -29,6 +30,7 @@ class Agent:
         self.print_steps = True
         self.debug = False
         self.show_images = False
+        self.acknowledge_safety_check_callback = acknowledge_safety_check_callback
         # handler for steps (defaults to built-in print)
         self.step_handler = step_handler or print
         # add computer-preview tool if computer is provided
@@ -86,6 +88,15 @@ class Agent:
             screenshot_base64 = self.computer.screenshot()
             if self.show_images:
                 show_image(screenshot_base64)
+
+            # if user doesn't ack all safety checks exit with error
+            pending_checks = item.get("pending_safety_checks", [])
+            for check in pending_checks:
+                message = check["message"]
+                if not self.acknowledge_safety_check_callback(message):
+                    raise ValueError(
+                        f"Safety check failed: {message}. Cannot continue with unacknowledged safety checks."
+                    )
 
             call_output = {
                 "type": "computer_call_output",

@@ -13,6 +13,11 @@ from computers.config import *
 from computers.default import *
 from computers import computers_config
 
+def acknowledge_safety_check_callback(message: str) -> bool:
+    response = input(
+        f"Safety Check Warning: {message}\nDo you want to acknowledge and proceed? (y/n): "
+    ).lower()
+    return response.lower().strip() == "y"
 
 class CuaAgentProvider(BaseAgentProvider):
     """An :pyclass:`BaseAgentProvider` implementation using *computer_use*.
@@ -52,13 +57,16 @@ class CuaAgentProvider(BaseAgentProvider):
         
         # Lazily instantiate computer + heavy agent --------------------------------
         if self._computer is None:
-            # Use the computer class as a context manager so that Playwright is
-            # started (via __enter__) and properly shut down later in close().
-            self._computer = self._computer_cls().__enter__()
+            # Create + enter the computer instance *inside a worker thread* so
+            # that the Playwright **sync** API does not block or interfere
+            # with the asyncio event-loop.
+            self._computer = await asyncio.to_thread(
+                lambda: self._computer_cls().__enter__()
+            )
 
         # Lazily instantiate the heavy agent with the runtime step_handler
         if self._agent is None:
-            self._agent = Agent(computer=self._computer, step_handler=step_handler)
+            self._agent = Agent(computer=self._computer, acknowledge_safety_check_callback=acknowledge_safety_check_callback, step_handler=step_handler)
         else:
             # Update the handler so callers can change it (e.g. enable voice)
             self._agent.step_handler = step_handler  # type: ignore[attr-defined]
@@ -67,7 +75,9 @@ class CuaAgentProvider(BaseAgentProvider):
         # rely on screen readers always begin on a deterministic page.
         if start_url and self._initial_turn:
             try:
-                self._computer.goto(start_url)  # type: ignore[attr-defined]
+                # Off-load navigation to the worker thread as it uses the
+                # sync Playwright API.
+                await asyncio.to_thread(self._computer.goto, start_url)  # type: ignore[attr-defined]
             finally:
                 self._initial_turn = False
 
@@ -76,7 +86,7 @@ class CuaAgentProvider(BaseAgentProvider):
         output_items: List[Dict[str, str]] = await asyncio.to_thread(
             self._agent.run_full_turn,  # type: ignore[arg-type]
             items,
-            print_steps=True,
+            print_steps=False,
             show_images=False,
             debug=False,
         )
@@ -93,12 +103,11 @@ class CuaAgentProvider(BaseAgentProvider):
         # and Playwright is stopped.  The three 'None' arguments correspond
         # to exc_type, exc_val and exc_tb when used in a "with" block.
         if self._computer is not None:
-            # The computer instance **is** the context manager returned from
-            # __enter__, so we can safely call __exit__ on it.
+            # __exit__ uses sync Playwright – run it in a worker thread.
             try:
                 exit_func = getattr(self._computer, "__exit__", None)
                 if callable(exit_func):
-                    exit_func(None, None, None)
+                    await asyncio.to_thread(exit_func, None, None, None)
             finally:
                 self._computer = None
 

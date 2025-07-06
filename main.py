@@ -139,7 +139,10 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
             items = [*conversation_history, {"role": "user", "content": user_input}]
             result_items = await agent_provider.run_full_turn(items, args.start_url, step_handler)
 
-            step_handler(result_items[-1]["content"])
+            # computer-use provider returns a list of items, so we need to get the last item and get the content
+            readable_result = result_items[-1]["content"] if isinstance(result_items[-1]["content"], str) else result_items[-1]["content"][0]["text"]
+
+            step_handler(readable_result)
 
             # Update conversation history
             conversation_history.extend([
