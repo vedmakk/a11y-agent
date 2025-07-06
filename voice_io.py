@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-"""Utility for voice input (speech-to-text) and voice output (text-to-speech) using
-OpenAI audio endpoints.
+"""Utility for voice input (speech-to-text) and voice output (text-to-speech).
+
+The core I/O logic is provider-agnostic. Concrete STT/TTS implementations live
+in `providers/` and are injected at runtime (see `main.py`).
 
 Requirements (added to requirements.txt):
     openai>=1.30.0
@@ -42,29 +44,24 @@ try:
 except Exception:
     playsound = None  # type: ignore
 
-try:
-    import openai  # type: ignore
-except Exception:
-    openai = None
+# No direct provider imports here – providers are instantiated externally.
 
 DEFAULT_SAMPLE_RATE = 16_000
 
 
 class VoiceIO:
     """High-level helper that records microphone input, transcribes it using
-    OpenAI Whisper and speaks text responses using OpenAI TTS.
+    an injected STT provider and speaks text responses using an injected TTS
+    provider.
     """
 
     def __init__(
         self,
-        model_transcription: str = "whisper-1",
-        model_tts: str = "tts-1",
-        voice: str = "alloy",
+        *,
+        stt_provider: STTProvider,
+        tts_provider: TTSProvider,
         sample_rate: int = DEFAULT_SAMPLE_RATE,
         verbose: bool = False,
-        *,
-        stt_provider: Optional[STTProvider] = None,
-        tts_provider: Optional[TTSProvider] = None,
     ) -> None:
         # Core audio deps are mandatory for recording / playback
         if sd is None or np is None or sf is None:
@@ -72,38 +69,12 @@ class VoiceIO:
                 "`sounddevice`, `soundfile` and `numpy` are required for VoiceIO. Install with `pip install sounddevice soundfile numpy`"
             )
 
+        # Providers (mandatory)
+        self.stt_provider = stt_provider
+        self.tts_provider = tts_provider
+
         self.sample_rate = sample_rate
         self.verbose = verbose
-        # Preserve provider config attributes for backward compatibility
-        self.model_transcription = model_transcription
-        self.model_tts = model_tts
-        self.voice_name = voice
-
-        # ------------------------------------------------------------------
-        # Providers (STT and TTS)
-        # ------------------------------------------------------------------
-        self.stt_provider: Optional[STTProvider] = stt_provider  # type: ignore[assignment]
-        self.tts_provider: Optional[TTSProvider] = tts_provider  # type: ignore[assignment]
-
-        if self.stt_provider is None or self.tts_provider is None:
-            # Lazily import OpenAI provider as default
-            try:
-                from providers.openai_provider import OpenAIProvider  # type: ignore
-
-                default_provider = OpenAIProvider(
-                    model_transcription=model_transcription,
-                    model_tts=model_tts,
-                    voice=voice,
-                )
-                if self.stt_provider is None:
-                    self.stt_provider = default_provider  # type: ignore[assignment]
-                if self.tts_provider is None:
-                    self.tts_provider = default_provider  # type: ignore[assignment]
-            except Exception as ex:
-                raise ImportError(
-                    "No providers specified and the OpenAI provider could not be initialized. "
-                    "Please supply explicit STT and TTS providers."
-                ) from ex
 
         # Simple on-disk TTS cache ----------------------------------------------------
         self._cache_dir = os.path.join(tempfile.gettempdir(), "voiceio_cache")
@@ -113,14 +84,6 @@ class VoiceIO:
             # Fallback to cwd if temp dir is not writable
             self._cache_dir = os.path.abspath("voiceio_cache")
             os.makedirs(self._cache_dir, exist_ok=True)
-
-    # ---------- OpenAI helpers ----------
-
-    @property
-    def client(self) -> "openai.OpenAI":  # type: ignore[name-defined]
-        if self._client is None:
-            self._client = openai.OpenAI()
-        return self._client
 
     # ---------- Recording helpers ----------
 

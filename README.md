@@ -40,11 +40,24 @@ playwright install
 Save your keys in a `.env` file or export them in the shell:
 
 ```
-OPENAI_API_KEY=sk-…   # required for GPT-4o AND Whisper STT
-# optional – use Anthropic, Gemini, etc. (see browser-use docs)
+OPENAI_API_KEY=sk-…   # required when using OpenAI LLM or audio endpoints
+# --- Voice provider configuration ---
+# Choose which engines to use for speech-to-text (STT) and text-to-speech (TTS).
+# Supported providers: `openai`, `system`
+
+VOICE_STT_PROVIDER=openai
+VOICE_TTS_PROVIDER=openai
+
+# Optional – only read when the provider is *openai*
+VOICE_OPENAI_TRANSCRIPTION_MODEL=whisper-1
+VOICE_OPENAI_TTS_MODEL=tts-1
+VOICE_OPENAI_VOICE=alloy
 ```
 
-> The `voice_io` helper will also look for `OPENAI_API_KEY` to call the Whisper audio endpoint for transcription.
+> The `main.py` helper reads these variables early during start-up (via
+> `python-dotenv`) and instantiates the correct providers. Neither the
+> providers themselves nor `voice_io.py` depend on environment variables – it's
+> all wired up in one place for clarity.
 
 ## Usage
 
@@ -70,6 +83,7 @@ Type your instructions (or 'exit' to quit):
 a11y-agent/
 ├── main.py                # CLI & control loop
 ├── voice_io.py            # Speech-to-text + text-to-speech (push-to-talk added)
+├── providers/             # Pluggable STT/TTS engines (OpenAI, System, …)
 ├── requirements.txt       # Python dependencies
 └── README.md              # This file
 ```

@@ -5,7 +5,7 @@ playsound==1.2.2
 numpy>=1.25.0
 scipy>=1.11.0
 # Optional offline STT / TTS dependencies
-speech_recognition>=3.10.0
+SpeechRecognition>=3.14.3
 # --- new dependencies for browser agent ---
 browser-use>=0.4.4
 playwright>=1.44.0
