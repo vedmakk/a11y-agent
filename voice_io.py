@@ -284,9 +284,14 @@ class VoiceIO:
 
     # ---------- Push-to-talk helper ----------
 
-    def push_to_talk(self, hotkey: str = "space") -> str:  # type: ignore[override]
-        """Record audio while *hotkey* is held down (default: *space* bar).
+    def push_to_talk(self, hotkey: str = "ctrl") -> str:  # type: ignore[override]
+        """Record audio while *hotkey* is held down.
 
+        The *hotkey* must be a string matching a member of
+        ``pynput.keyboard.Key`` (e.g. ``"ctrl"`` or ``"space"``).
+
+        Default is the ``ctrl`` key.
+        
         When the user presses and holds the key, a short beep plays, recording starts
         and continues until the key is released. The captured audio is transcribed
         with :py:meth:`speech_to_text` and the temporary WAV file is cleaned up.
@@ -304,7 +309,16 @@ class VoiceIO:
                 "`pynput` is required for push-to-talk functionality. Install with `pip install pynput`."
             ) from ex
 
-        print("[VoiceIO] Hold SPACE and speak… release to finish (ESC to cancel).")
+        # Resolve *hotkey* to a pynput ``Key`` instance ---------------------------
+        try:
+            target_key = getattr(kb.Key, hotkey.lower())
+        except AttributeError as exc:
+            raise ValueError(f"Unknown hotkey key name: {hotkey}") from exc
+
+        # Friendly name for status messages
+        hotkey_label = target_key.name.upper() if hasattr(target_key, "name") else str(target_key)
+
+        print(f"[VoiceIO] Hold {hotkey_label} and speak… release to finish (ESC to cancel).")
 
         pressed_evt = threading.Event()
         released_evt = threading.Event()
@@ -314,11 +328,11 @@ class VoiceIO:
             if key == kb.Key.esc:
                 cancel_evt.set()
                 return False
-            if key == kb.Key.space:
+            if key == target_key:
                 pressed_evt.set()
                 return False  # Stop early; we only needed the press.
 
-        # Wait for the first SPACE press ------------------------------------------------
+        # Wait for the first press of the chosen hotkey --------------------------------
         with kb.Listener(on_press=_on_press) as wait_listener:
             wait_listener.join()
 
@@ -338,7 +352,7 @@ class VoiceIO:
         # Prepare listener for release while recording
 
         def _on_release(key):  # noqa: ANN001
-            if key == kb.Key.space:
+            if key == target_key:
                 released_evt.set()
                 return False
 

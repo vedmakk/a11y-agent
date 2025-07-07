@@ -3,7 +3,7 @@
 A proof of concept for an AI based screen reader and browser assistant.
 
 This project turns natural‐language, **voice** commands into fully‐automated browser actions using the open-source [browser-use](https://github.com/browser-use/browser-use) library.  
-Hold <kbd>SPACE</kbd>, speak an instruction, release the key and the agent will:
+Hold <kbd>CTRL</kbd>, speak an instruction, release the key and the agent will:
 
 1. Transcribe your speech with OpenAI Whisper
 2. Launch a Chromium browser (Playwright) locally
@@ -18,7 +18,7 @@ $ python main.py --voice --start-url "https://google.com"
 
 ## Features
 
-- 🔊 **Push-to-talk** – hold <kbd>SPACE</kbd> to record, release to send
+- 🔊 **Push-to-talk** – hold <kbd>CTRL</kbd> to record, release to send
 - 🖱️ **Autonomous web control** powered by _browser-use_ or OpenAI's _computer-use_ and Playwright
 - 🦜 **OpenAI GPT-4.1** or OpenAI's _computer-use_ model by default (configurable)
 - 💬 Speaks every step and the final answer (text fallback when `--voice` off)

@@ -98,7 +98,7 @@ async def interactive_loop(args) -> None:  # noqa: C901  – keeps CLI simple
 
     if args.voice:
         step_handler(
-            "Voice mode enabled. Press 'ESC' to skip playback. Hold SPACE to speak, release to send. Say 'exit' to quit"  # type: ignore[arg-type]
+            "Voice mode enabled. Press 'ESC' to skip playback. Hold CTRL to speak, release to send. Say 'exit' to quit"  # type: ignore[arg-type]
             , cache=True
         )
     else:
