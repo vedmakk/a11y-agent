@@ -2,7 +2,10 @@
 
 A proof of concept for an AI based screen reader and browser assistant.
 
-This project turns natural‐language, **voice** commands into fully‐automated browser actions using the open-source [browser-use](https://github.com/browser-use/browser-use) library.  
+This project turns natural‐language, **voice** commands into fully‐automated browser actions using the open-source [browser-use](https://github.com/browser-use/browser-use) library.
+
+Read more in [this blog post](https://medium.com/@jan.mittelman/a11y-agent-screen-readers-rely-on-good-markup-ai-doesnt-here-s-a-prototype-of-what-s-possible-7e19bccb0572).
+
 Hold <kbd>CTRL</kbd>, speak an instruction, release the key and the agent will:
 
 1. Transcribe your speech with OpenAI Whisper
