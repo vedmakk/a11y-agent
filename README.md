@@ -142,7 +142,7 @@ a11y-agent/
 
 Ideas, improvements, PRs — all welcome. If you want to help make this ISO better, faster, or more flexible, open an issue or submit a pull request.
 
-##📜 License
+## 📜 License
 
 MIT — use freely, modify openly, and share widely. See the LICENSE file for details.
 
