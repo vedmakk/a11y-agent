@@ -140,7 +140,7 @@ a11y-agent/
 
 ## 🤝 Contributing
 
-Ideas, improvements, PRs — all welcome. If you want to help make this ISO better, faster, or more flexible, open an issue or submit a pull request.
+Ideas, improvements, PRs — all welcome. If you want to help make this project better, faster, or more flexible, open an issue or submit a pull request.
 
 ## 📜 License
 
